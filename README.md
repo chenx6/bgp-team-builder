@@ -1,4 +1,4 @@
-# bgp-score-calculate
+# bgp-team-builder
 
 ## Features
 
