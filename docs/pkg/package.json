@@ -1,0 +1,15 @@
+{
+  "name": "wasmdori",
+  "collaborators": [
+    "chen_null <abc82766@gmail.com>"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "wasmdori_bg.wasm",
+    "wasmdori.js",
+    "wasmdori.d.ts"
+  ],
+  "module": "wasmdori.js",
+  "types": "wasmdori.d.ts",
+  "sideEffects": false
+}
