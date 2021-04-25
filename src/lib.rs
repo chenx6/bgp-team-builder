@@ -123,19 +123,19 @@ fn calc_card_score(
         bonus += event_bonus.all_fit_bonus;
     }
     // All bonus sum up
-    let mut score = card_data.performance + card_data.technique + card_data.visual;
-    score = (score as f64 * bonus) as u32;
+    let mut score: f64 = (card_data.performance + card_data.technique + card_data.visual) as f64;
+    score *= bonus + 1.0;
     // Parameter bonus
     if has_event == 2 {
-        score += (1.5
-            * (match event_bonus.parameter.as_str() {
+        score += 0.5
+            * match event_bonus.parameter.as_str() {
                 "performance" => card_data.performance,
                 "technique" => card_data.technique,
                 "visual" => card_data.visual,
                 _ => 0,
-            }) as f64) as u32;
+            } as f64;
     }
-    score
+    score as u32
 }
 
 /// Use user profile and event bonus to calculate max score cardset
