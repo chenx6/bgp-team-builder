@@ -260,6 +260,28 @@ mod tests {
     use std::fs::File;
     use std::io::prelude::*;
 
+    impl CardStatus {
+        fn new(
+            id: u32,
+            level: u8,
+            exclude: bool,
+            art: u8,
+            train: u8,
+            ep: u8,
+            skill: u8,
+        ) -> CardStatus {
+            CardStatus {
+                id,
+                level,
+                exclude,
+                art,
+                train,
+                ep,
+                skill,
+            }
+        }
+    }
+
     fn read_to_str(path: String) -> Result<String, std::io::Error> {
         let mut file = File::open(path)?;
         let mut buffer = String::new();
@@ -337,5 +359,59 @@ mod tests {
             );
         }
         assert_eq!(result.len(), 5, "Calculation failed!")
+    }
+
+    #[test]
+    fn score_test() {
+        let cards_path = String::from("docs/cards.json");
+        let characters_path = String::from("docs/characters.json");
+        let bands_path = String::from("docs/bands.json");
+        let character_band = character_band_new_from_string(characters_path, bands_path).unwrap();
+        let all_cards: HashMap<String, Card> = read_cards(cards_path).unwrap();
+
+        let band_name = String::from("Hello, Happy World!");
+        let band_bonus = vec![0.04, 0.04, 0.04, 0.04, 0.04, 0.1, 0.1];
+        let prop_name = String::from("pure");
+        let prop_bonus = vec![0.1, 0.1];
+        let card_status = vec![
+            CardStatus::new(683, 50, false, 1, 1, 1, 0),
+            CardStatus::new(466, 50, false, 1, 1, 1, 0),
+            CardStatus::new(588, 60, false, 1, 1, 1, 0),
+            CardStatus::new(589, 50, false, 1, 1, 1, 0),
+            CardStatus::new(382, 50, false, 1, 1, 1, 0),
+        ];
+        let event_bonus = EventBonus {
+            prop: String::from("pure"),
+            characters: vec![11, 12, 13, 14, 15],
+            prop_bonus: 0.1,
+            character_bonus: 0.2,
+            parameter: String::from("technique"),
+            all_fit_bonus: 0.2,
+        };
+        let magazine = Magazine {
+            performance: 0.16,
+            technique: 0.16,
+            visual: 0.16,
+        };
+        let mut final_score = 0;
+        for card_stat in card_status.iter() {
+            let card = all_cards.get(&card_stat.id.to_string()).unwrap();
+            let curr_score = calc_card_score(
+                &card,
+                &card_stat,
+                &event_bonus,
+                &character_band,
+                &String::from("performance"),
+                &magazine.performance,
+                &band_name,
+                &band_bonus,
+                &prop_name,
+                &prop_bonus,
+            );
+            final_score += curr_score;
+        }
+        // TODO: Use f64 to sum up card score
+        let game_score = 314763;
+        assert!((game_score - 5..game_score + 5).contains(&final_score));
     }
 }
