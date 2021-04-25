@@ -81,7 +81,10 @@ fn calc_card_score(
         // Episode bonus score
         if rank == "episodes" {
             let info: Vec<CardData> = serde_json::from_value(info.clone()).unwrap();
-            for stat in info.iter() {
+            for (idx, stat) in info.iter().enumerate() {
+                if idx >= card_stat.ep as usize {
+                    break;
+                }
                 card_data.performance += mul(stat.performance, level_percentage);
                 card_data.technique += mul(stat.technique, level_percentage);
                 card_data.visual += mul(stat.visual, level_percentage);
