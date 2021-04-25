@@ -64,6 +64,8 @@ fn calc_card_score(
     card_stat: &CardStatus,
     event_bonus: &EventBonus,
     character_band: &HashMap<u8, String>,
+    magazine_name: &String,
+    magazine: &f64,
     band_name: &String,
     band_bonus: &Vec<f64>,
     prop_name: &String,
@@ -81,7 +83,10 @@ fn calc_card_score(
         // Episode bonus score
         if rank == "episodes" {
             let info: Vec<CardData> = serde_json::from_value(info.clone()).unwrap();
-            for stat in info.iter() {
+            for (idx, stat) in info.iter().enumerate() {
+                if idx >= card_stat.ep as usize {
+                    break;
+                }
                 card_data.performance += mul(stat.performance, level_percentage);
                 card_data.technique += mul(stat.technique, level_percentage);
                 card_data.visual += mul(stat.visual, level_percentage);
@@ -120,19 +125,26 @@ fn calc_card_score(
         bonus += event_bonus.all_fit_bonus;
     }
     // All bonus sum up
-    let mut score = card_data.performance + card_data.technique + card_data.visual;
-    score = (score as f64 * bonus) as u32;
+    let mut score: f64 = (card_data.performance + card_data.technique + card_data.visual) as f64;
+    score *= bonus + 1.0;
     // Parameter bonus
     if has_event == 2 {
-        score += (1.5
-            * (match event_bonus.parameter.as_str() {
+        score += 0.5
+            * match event_bonus.parameter.as_str() {
                 "performance" => card_data.performance,
                 "technique" => card_data.technique,
                 "visual" => card_data.visual,
                 _ => 0,
-            }) as f64) as u32;
+            } as f64;
     }
-    score
+    score += magazine
+        * match magazine_name.as_str() {
+            "performance" => card_data.performance,
+            "technique" => card_data.technique,
+            "visual" => card_data.visual,
+            _ => 0,
+        } as f64;
+    score as u32
 }
 
 /// Use user profile and event bonus to calculate max score cardset
@@ -145,59 +157,70 @@ fn calc_max_score(
     let card_skill = card_skill_new();
     let mut best_cardset: HashMap<u8, CalcCard> = HashMap::new();
     let mut best_score = 0;
+    let mut magazines: HashMap<String, f64> = HashMap::new();
+    magazines.insert(
+        String::from("performance"),
+        user_profile.magazine.performance,
+    );
+    magazines.insert(String::from("technique"), user_profile.magazine.technique);
+    magazines.insert(String::from("visual"), user_profile.magazine.visual);
     // Iterator props and bands to find best card set
     // Maybe greedy algorithm can boost it up?
     for (prop_name, prop_bonus) in user_profile.props.iter() {
         for (band_name, band_bonus) in user_profile.bands.iter() {
-            let mut calc_cards: Vec<CalcCard> = Vec::new();
-            for card_stat in user_profile.card_status.iter() {
-                if card_stat.exclude {
-                    continue;
-                }
-                let card = match cards.get(&card_stat.id.to_string()) {
-                    Some(value) => value,
-                    None => {
-                        println!("Cannot find card {}", card_stat.id);
+            for (magazine_name, magazine_bonus) in magazines.iter() {
+                let mut calc_cards: Vec<CalcCard> = Vec::new();
+                for card_stat in user_profile.card_status.iter() {
+                    if card_stat.exclude {
                         continue;
                     }
-                };
-                // If card doesn't release
-                if card.released_at[user_profile.server as usize].is_null() {
-                    continue;
+                    let card = match cards.get(&card_stat.id.to_string()) {
+                        Some(value) => value,
+                        None => {
+                            println!("Cannot find card {}", card_stat.id);
+                            continue;
+                        }
+                    };
+                    // If card doesn't release
+                    if card.released_at[user_profile.server as usize].is_null() {
+                        continue;
+                    }
+                    calc_cards.push(CalcCard {
+                        card_id: card_stat.id,
+                        character_id: card.character_id,
+                        score: calc_card_score(
+                            card,
+                            card_stat,
+                            event_bonus,
+                            character_band,
+                            magazine_name,
+                            magazine_bonus,
+                            band_name,
+                            band_bonus,
+                            prop_name,
+                            prop_bonus,
+                        ),
+                        skill: card_skill[&card.skill_id],
+                    });
                 }
-                calc_cards.push(CalcCard {
-                    card_id: card_stat.id,
-                    character_id: card.character_id,
-                    score: calc_card_score(
-                        card,
-                        card_stat,
-                        event_bonus,
-                        character_band,
-                        band_name,
-                        band_bonus,
-                        prop_name,
-                        prop_bonus,
-                    ),
-                    skill: card_skill[&card.skill_id],
-                });
-            }
-            // Sort by score
-            calc_cards.sort_by(|a, b| b.cmp(a));
-            // Calculate score
-            let mut result: HashMap<u8, CalcCard> = HashMap::new();
-            let mut result_score = 0;
-            for it in calc_cards {
-                if result.len() >= 5 {
-                    break;
+                // Sort by score
+                calc_cards.sort_by(|a, b| b.cmp(a));
+                // Calculate score
+                let mut result: HashMap<u8, CalcCard> = HashMap::new();
+                let mut result_score = 0;
+                for it in calc_cards {
+                    if result.len() >= 5 {
+                        break;
+                    }
+                    if !result.contains_key(&it.character_id) {
+                        result_score += it.score;
+                        result.insert(it.character_id, it);
+                    }
                 }
-                if !result.contains_key(&it.character_id) {
-                    result_score += it.score;
-                    result.insert(it.character_id, it);
+                if result_score > best_score {
+                    best_score = result_score;
+                    best_cardset = result;
                 }
-            }
-            if result_score > best_score {
-                best_score = result_score;
-                best_cardset = result;
             }
         }
     }
@@ -236,6 +259,28 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::prelude::*;
+
+    impl CardStatus {
+        fn new(
+            id: u32,
+            level: u8,
+            exclude: bool,
+            art: u8,
+            train: u8,
+            ep: u8,
+            skill: u8,
+        ) -> CardStatus {
+            CardStatus {
+                id,
+                level,
+                exclude,
+                art,
+                train,
+                ep,
+                skill,
+            }
+        }
+    }
 
     fn read_to_str(path: String) -> Result<String, std::io::Error> {
         let mut file = File::open(path)?;
@@ -276,7 +321,10 @@ mod tests {
         for (character_id, character) in characters.iter() {
             let character_id = character_id.parse::<u8>().unwrap_or(1);
             let band = bands.get(&character.band_id.to_string()).unwrap();
-            character_band.insert(character_id, band.band_name[1].to_string());
+            character_band.insert(
+                character_id,
+                band.band_name[1].as_str().unwrap().to_string(),
+            );
         }
         Ok(character_band)
     }
@@ -311,5 +359,59 @@ mod tests {
             );
         }
         assert_eq!(result.len(), 5, "Calculation failed!")
+    }
+
+    #[test]
+    fn score_test() {
+        let cards_path = String::from("docs/cards.json");
+        let characters_path = String::from("docs/characters.json");
+        let bands_path = String::from("docs/bands.json");
+        let character_band = character_band_new_from_string(characters_path, bands_path).unwrap();
+        let all_cards: HashMap<String, Card> = read_cards(cards_path).unwrap();
+
+        let band_name = String::from("Hello, Happy World!");
+        let band_bonus = vec![0.04, 0.04, 0.04, 0.04, 0.04, 0.1, 0.1];
+        let prop_name = String::from("pure");
+        let prop_bonus = vec![0.1, 0.1];
+        let card_status = vec![
+            CardStatus::new(683, 50, false, 1, 1, 1, 0),
+            CardStatus::new(466, 50, false, 1, 1, 1, 0),
+            CardStatus::new(588, 60, false, 1, 1, 1, 0),
+            CardStatus::new(589, 50, false, 1, 1, 1, 0),
+            CardStatus::new(382, 50, false, 1, 1, 1, 0),
+        ];
+        let event_bonus = EventBonus {
+            prop: String::from("pure"),
+            characters: vec![11, 12, 13, 14, 15],
+            prop_bonus: 0.1,
+            character_bonus: 0.2,
+            parameter: String::from("technique"),
+            all_fit_bonus: 0.2,
+        };
+        let magazine = Magazine {
+            performance: 0.16,
+            technique: 0.16,
+            visual: 0.16,
+        };
+        let mut final_score = 0;
+        for card_stat in card_status.iter() {
+            let card = all_cards.get(&card_stat.id.to_string()).unwrap();
+            let curr_score = calc_card_score(
+                &card,
+                &card_stat,
+                &event_bonus,
+                &character_band,
+                &String::from("performance"),
+                &magazine.performance,
+                &band_name,
+                &band_bonus,
+                &prop_name,
+                &prop_bonus,
+            );
+            final_score += curr_score;
+        }
+        // TODO: Use f64 to sum up card score
+        let game_score = 314763;
+        assert!((game_score - 5..game_score + 5).contains(&final_score));
     }
 }
