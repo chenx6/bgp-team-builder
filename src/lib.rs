@@ -279,7 +279,10 @@ mod tests {
         for (character_id, character) in characters.iter() {
             let character_id = character_id.parse::<u8>().unwrap_or(1);
             let band = bands.get(&character.band_id.to_string()).unwrap();
-            character_band.insert(character_id, band.band_name[1].to_string());
+            character_band.insert(
+                character_id,
+                band.band_name[1].as_str().unwrap().to_string(),
+            );
         }
         Ok(character_band)
     }
