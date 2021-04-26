@@ -87,12 +87,11 @@ fn calc_card_score(
                 if idx >= card_stat.ep as usize {
                     break;
                 }
-                card_data.performance += mul(stat.performance, level_percentage);
-                card_data.technique += mul(stat.technique, level_percentage);
-                card_data.visual += mul(stat.visual, level_percentage);
+                card_data.performance += stat.performance;
+                card_data.technique += stat.technique;
+                card_data.visual += stat.visual;
             }
         // Level bonus
-        // TODO Use card stats
         } else if rank != "1" {
             let info: CardData = serde_json::from_value(info.clone()).unwrap();
             card_data.performance += mul(info.performance, level_percentage);
