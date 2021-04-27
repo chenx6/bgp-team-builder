@@ -110,6 +110,13 @@ pub struct CardStatus {
     pub skill: u8,
 }
 
+#[derive(Deserialize)]
+pub struct SongNote {
+    pub time: f64,
+    pub fever: Option<bool>,
+    pub skill: Option<bool>,
+}
+
 fn b(t: &str) -> u32 {
     let mut n: u32 = 0;
     let base: u32 = 64;

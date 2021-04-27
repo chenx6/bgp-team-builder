@@ -152,6 +152,7 @@ fn calc_max_score(
     user_profile: &UserProfile,
     event_bonus: &EventBonus,
     character_band: &HashMap<u8, String>,
+    song_data: &Vec<SongNote>,
 ) -> HashMap<u8, CalcCard> {
     let card_skill = card_skill_new();
     let mut best_cardset: HashMap<u8, CalcCard> = HashMap::new();
@@ -163,6 +164,10 @@ fn calc_max_score(
     );
     magazines.insert(String::from("technique"), user_profile.magazine.technique);
     magazines.insert(String::from("visual"), user_profile.magazine.visual);
+    let mut song_score_map: HashMap<u8, u32> = HashMap::new();
+    for (k, v) in card_skill.iter() {
+        song_score_map.insert(*k, song_score(1, *v, false, song_data));
+    }
     // Iterator props and bands to find best card set
     // Maybe greedy algorithm can boost it up?
     for (prop_name, prop_bonus) in user_profile.props.iter() {
@@ -198,7 +203,8 @@ fn calc_max_score(
                             band_bonus,
                             prop_name,
                             prop_bonus,
-                        ),
+                        ), // * song_score_map[&card.skill_id],
+                        // TODO find a better way to use real song data
                         skill: card_skill[&card.skill_id],
                     });
                 }
@@ -226,6 +232,46 @@ fn calc_max_score(
     best_cardset
 }
 
+/// Calculate the skill bonus in real song
+fn song_score(
+    base_score: u32,
+    skill_bonus: f64,
+    has_fever: bool,
+    song_data: &Vec<SongNote>,
+) -> u32 {
+    let mut final_score = 0f64;
+    let mut skill_end = 0.0;
+    for note in song_data.iter() {
+        let mut bonus = 0f64;
+        // Fever
+        bonus += match note.fever {
+            Some(_) => match has_fever {
+                true => 1.0,
+                false => 0.0,
+            },
+            None => 0.0,
+        };
+        // Skill
+        match note.skill {
+            Some(_) => {
+                // TODO hard-encoded skill time
+                skill_end = note.time + 5.0;
+            }
+            None => {}
+        };
+        if note.time < skill_end {
+            bonus += skill_bonus - 1.0;
+        }
+        final_score += (bonus + 1.0) * base_score as f64;
+    }
+    final_score as u32
+}
+
+/// Calculate the score of single note
+fn note_base_score(team_base: u32, song_level: u32, note_count: usize) -> u32 {
+    (3.0 * team_base as f64 * (1 + song_level - 5) as f64 / note_count as f64) as u32
+}
+
 /// Use JS side data to build team that can get best score
 #[wasm_bindgen]
 pub fn gene_score(
@@ -234,6 +280,7 @@ pub fn gene_score(
     raw_user_profile: &JsValue,
     characters: &JsValue,
     bands: &JsValue,
+    song_data: &JsValue,
 ) -> JsValue {
     console_error_panic_hook::set_once();
     let event_bonus = event_bonus.into_serde().unwrap();
@@ -243,12 +290,14 @@ pub fn gene_score(
         bands.into_serde().unwrap(),
     );
     let all_cards: HashMap<String, Card> = cards.into_serde().unwrap();
+    let song_data = song_data.into_serde().unwrap();
     let user_profile = UserProfile::new(&raw_user_profile);
     JsValue::from_serde(&calc_max_score(
         &all_cards,
         &user_profile,
         &event_bonus,
         &character_band,
+        &song_data,
     ))
     .unwrap()
 }
@@ -328,6 +377,11 @@ mod tests {
         Ok(character_band)
     }
 
+    fn read_song_notes(path: String) -> Result<Vec<SongNote>, Box<dyn std::error::Error>> {
+        let buffer = read_to_str(path)?;
+        Ok(serde_json::from_str(buffer.as_str())?)
+    }
+
     #[test]
     fn calc_test() {
         let cards_path = String::from("docs/cards.json");
@@ -338,6 +392,7 @@ mod tests {
         let character_band = character_band_new_from_string(characters_path, bands_path).unwrap();
         let all_cards: HashMap<String, Card> = read_cards(cards_path).unwrap();
         let user_profile = UserProfile::new(&raw_user_profile);
+        let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
         // 只属于我们的SUMMER VACATION
         let event_bonus = EventBonus {
             prop: String::from("happy"),
@@ -347,7 +402,13 @@ mod tests {
             parameter: String::from("technique"),
             all_fit_bonus: 0.0,
         };
-        let result = calc_max_score(&all_cards, &user_profile, &event_bonus, &character_band);
+        let result = calc_max_score(
+            &all_cards,
+            &user_profile,
+            &event_bonus,
+            &character_band,
+            &song_notes,
+        );
         for (k, v) in result.iter() {
             println!(
                 "{} {}",
@@ -412,5 +473,29 @@ mod tests {
         // TODO: Use f64 to sum up card score
         let game_score = 314763;
         assert!((game_score - 5..game_score + 5).contains(&final_score));
+    }
+
+    #[test]
+    fn song_test() {
+        // A to Z
+        let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
+        // 圣诞老人要来我家
+        // 梦幻的抽鬼牌
+        let calc_card = CalcCard {
+            card_id: 588,
+            character_id: 12,
+            score: 53505,
+            skill: 2.0,
+        };
+        // 极其梦幻的生物
+        let calc_card2 = CalcCard {
+            card_id: 298,
+            character_id: 12,
+            score: 63880,
+            skill: 1.3,
+        };
+        let score1 = song_score(calc_card.score, calc_card.skill, false, &song_notes);
+        let score2 = song_score(calc_card2.score, calc_card2.skill, false, &song_notes);
+        assert!(score1 > score2, "{} {}", score1, score2);
     }
 }
