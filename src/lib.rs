@@ -1,8 +1,10 @@
 use serde::Serialize;
-use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashSet};
 use wasm_bindgen::prelude::*;
+mod song_calculate;
 mod user_data;
+use song_calculate::*;
 use user_data::*;
 
 #[cfg(feature = "wee_alloc")]
@@ -21,23 +23,17 @@ pub struct CalcCard {
     character_id: u8,
     score: u32,
     skill: f64,
+    skill_id: u8,
+    skill_mul: f64,
 }
 
 impl Eq for CalcCard {}
 
 impl Ord for CalcCard {
     fn cmp(&self, other: &Self) -> Ordering {
-        let diff = if self.score > other.score {
-            self.score - other.score
-        } else {
-            other.score - self.score
-        };
-        // If score is close, we can look at skill
-        if diff <= 1000 {
-            self.skill.partial_cmp(&other.skill).unwrap()
-        } else {
-            self.score.cmp(&other.score)
-        }
+        let score = self.score as f64 * self.skill_mul;
+        let other_score = other.score as f64 * other.skill_mul;
+        score.partial_cmp(&other_score).unwrap_or(Ordering::Equal)
     }
 }
 
@@ -153,6 +149,7 @@ fn calc_max_score(
     event_bonus: &EventBonus,
     character_band: &HashMap<u8, String>,
     song_data: &Vec<SongNote>,
+    skills: &HashMap<String, Skill>,
 ) -> HashMap<u8, CalcCard> {
     let card_skill = card_skill_new();
     let mut best_cardset: HashMap<u8, CalcCard> = HashMap::new();
@@ -164,10 +161,15 @@ fn calc_max_score(
     );
     magazines.insert(String::from("technique"), user_profile.magazine.technique);
     magazines.insert(String::from("visual"), user_profile.magazine.visual);
-    let mut song_score_map: HashMap<u8, u32> = HashMap::new();
-    for (k, v) in card_skill.iter() {
-        song_score_map.insert(*k, song_score(1, *v, false, song_data));
+    // Cache skill mul table
+    let mut skill_set: HashSet<u32> = HashSet::new();
+    for card_stat in user_profile.card_status.iter() {
+        let card = cards.get(&card_stat.id.to_string()).unwrap();
+        let tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
+        skill_set.insert(tag);
     }
+    let calc_skills: Vec<u32> = skill_set.into_iter().collect();
+    let cache_table = cache_table(&calc_skills, &skills, song_data, 26, 0.97, false);
     // Iterator props and bands to find best card set
     // Maybe greedy algorithm can boost it up?
     for (prop_name, prop_bonus) in user_profile.props.iter() {
@@ -189,6 +191,8 @@ fn calc_max_score(
                     if card.released_at[user_profile.server as usize].is_null() {
                         continue;
                     }
+                    let skill_tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
+                    let skill_mul = cache_table[&skill_tag][&skill_tag] / 6.0;
                     calc_cards.push(CalcCard {
                         card_id: card_stat.id,
                         character_id: card.character_id,
@@ -203,9 +207,10 @@ fn calc_max_score(
                             band_bonus,
                             prop_name,
                             prop_bonus,
-                        ), // * song_score_map[&card.skill_id],
-                        // TODO find a better way to use real song data
+                        ),
                         skill: card_skill[&card.skill_id],
+                        skill_id: card.skill_id,
+                        skill_mul,
                     });
                 }
                 // Sort by score
@@ -232,46 +237,6 @@ fn calc_max_score(
     best_cardset
 }
 
-/// Calculate the skill bonus in real song
-fn song_score(
-    base_score: u32,
-    skill_bonus: f64,
-    has_fever: bool,
-    song_data: &Vec<SongNote>,
-) -> u32 {
-    let mut final_score = 0f64;
-    let mut skill_end = 0.0;
-    for note in song_data.iter() {
-        let mut bonus = 0f64;
-        // Fever
-        bonus += match note.fever {
-            Some(_) => match has_fever {
-                true => 1.0,
-                false => 0.0,
-            },
-            None => 0.0,
-        };
-        // Skill
-        match note.skill {
-            Some(_) => {
-                // TODO hard-encoded skill time
-                skill_end = note.time + 5.0;
-            }
-            None => {}
-        };
-        if note.time < skill_end {
-            bonus += skill_bonus - 1.0;
-        }
-        final_score += (bonus + 1.0) * base_score as f64;
-    }
-    final_score as u32
-}
-
-/// Calculate the score of single note
-fn note_base_score(team_base: u32, song_level: u32, note_count: usize) -> u32 {
-    (3.0 * team_base as f64 * (1 + song_level - 5) as f64 / note_count as f64) as u32
-}
-
 /// Use JS side data to build team that can get best score
 #[wasm_bindgen]
 pub fn gene_score(
@@ -281,6 +246,7 @@ pub fn gene_score(
     characters: &JsValue,
     bands: &JsValue,
     song_data: &JsValue,
+    skills: &JsValue,
 ) -> JsValue {
     console_error_panic_hook::set_once();
     let event_bonus = event_bonus.into_serde().unwrap();
@@ -292,12 +258,14 @@ pub fn gene_score(
     let all_cards: HashMap<String, Card> = cards.into_serde().unwrap();
     let song_data = song_data.into_serde().unwrap();
     let user_profile = UserProfile::new(&raw_user_profile);
+    let skills: HashMap<String, Skill> = skills.into_serde().unwrap();
     JsValue::from_serde(&calc_max_score(
         &all_cards,
         &user_profile,
         &event_bonus,
         &character_band,
         &song_data,
+        &skills,
     ))
     .unwrap()
 }
@@ -305,6 +273,7 @@ pub fn gene_score(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::to_string;
     use std::fs::File;
     use std::io::prelude::*;
 
@@ -382,6 +351,11 @@ mod tests {
         Ok(serde_json::from_str(buffer.as_str())?)
     }
 
+    fn read_skill(path: String) -> Result<HashMap<String, Skill>, Box<dyn std::error::Error>> {
+        let buffer = read_to_str(path)?;
+        Ok(serde_json::from_str(buffer.as_str())?)
+    }
+
     #[test]
     fn calc_test() {
         let cards_path = String::from("docs/cards.json");
@@ -393,6 +367,7 @@ mod tests {
         let all_cards: HashMap<String, Card> = read_cards(cards_path).unwrap();
         let user_profile = UserProfile::new(&raw_user_profile);
         let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
+        let skills = read_skill(String::from("docs/skills.json")).unwrap();
         // 只属于我们的SUMMER VACATION
         let event_bonus = EventBonus {
             prop: String::from("happy"),
@@ -408,6 +383,7 @@ mod tests {
             &event_bonus,
             &character_band,
             &song_notes,
+            &skills,
         );
         for (k, v) in result.iter() {
             println!(
@@ -479,6 +455,7 @@ mod tests {
     fn song_test() {
         // A to Z
         let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
+        let skills = read_skill(String::from("docs/skills.json")).unwrap();
         // 圣诞老人要来我家
         // 梦幻的抽鬼牌
         let calc_card = CalcCard {
@@ -486,6 +463,8 @@ mod tests {
             character_id: 12,
             score: 53505,
             skill: 2.0,
+            skill_id: 4,
+            skill_mul: 0.5,
         };
         // 极其梦幻的生物
         let calc_card2 = CalcCard {
@@ -493,9 +472,39 @@ mod tests {
             character_id: 12,
             score: 63880,
             skill: 1.3,
+            skill_id: 13,
+            skill_mul: 0.5,
         };
-        let score1 = song_score(calc_card.score, calc_card.skill, false, &song_notes);
-        let score2 = song_score(calc_card2.score, calc_card2.skill, false, &song_notes);
+        let score1 = song_score(
+            &vec![calc_card.skill_id; 6],
+            &vec![0; 6],
+            26,
+            false,
+            0.97,
+            &song_notes,
+            &skills,
+        );
+        let score2 = song_score(
+            &vec![calc_card2.skill_id; 6],
+            &vec![0; 6],
+            26,
+            false,
+            0.97,
+            &song_notes,
+            &skills,
+        );
+        println!("{} {}", score1, score2);
         assert!(score1 > score2, "{} {}", score1, score2);
+    }
+
+    #[test]
+    fn skill_test() {
+        let skills = read_skill(String::from("docs/skills.json")).unwrap();
+        let tags: Vec<u32> = vec![
+            120, 180, 40, 140, 70, 200, 100, 260, 90, 60, 30, 110, 130, 170, 250, 240,
+        ];
+        let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
+        let table = cache_table(&tags, &skills, &song_notes, 26, 0.97, false);
+        println!("{}", to_string(&table).unwrap());
     }
 }
