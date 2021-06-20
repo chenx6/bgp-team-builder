@@ -223,7 +223,7 @@ fn calc_max_score(
                         break;
                     }
                     if !result.contains_key(&it.character_id) {
-                        result_score += it.score;
+                        result_score += (it.score as f64 * it.skill_mul) as u32;
                         result.insert(it.character_id, it);
                     }
                 }
