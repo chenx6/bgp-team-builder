@@ -26,7 +26,7 @@ pub fn skill_bonus(skill: &Skill, accurate: f64, index: u32) -> f64 {
     let mut a = 0.0;
     let mut r = 0.0;
     let mut s = 0.0;
-    let mut m = true; // Mystery variable in bestdori...
+    let mut m = true;
     for (k, v) in skill.activation_effect.activate_effect_types.iter() {
         match k.as_str() {
             "score" | "score_over_life" | "score_under_life" | "score_continued_note_judge" => {
@@ -45,8 +45,7 @@ pub fn skill_bonus(skill: &Skill, accurate: f64, index: u32) -> f64 {
                 };
                 if k == "score_continued_note_judge" {
                     a = 1.0 + effect_value as f64 / 100.0;
-                }
-                if v.activate_condition == "perfect" {
+                } else if v.activate_condition == "perfect" {
                     if r == 0.0 {
                         r = effect_value as f64 / 100.0;
                     }
@@ -58,8 +57,7 @@ pub fn skill_bonus(skill: &Skill, accurate: f64, index: u32) -> f64 {
                         s = effect_value as f64 / 100.0;
                     }
                 }
-                // m = false;
-                break;
+                m = false;
             }
             _ => {}
         }
@@ -110,7 +108,7 @@ pub fn song_score(
         if note.time < skill_end {
             y += 1;
             let skill = &skills[&skill_ids[skill_order - 1].to_string()];
-            bonus *= skill_bonus(&skill, 0.97, y);
+            bonus *= skill_bonus(&skill, accuracy, y);
         }
         match note.skill {
             Some(_) => {
@@ -118,6 +116,8 @@ pub fn song_score(
                 y = 0;
                 let skill = &skills[&skill_ids[skill_order - 1].to_string()];
                 skill_end = note.time + skill.duration[skill_levels[skill_order - 1] as usize];
+                bonus *= skill_bonus(&skill, accuracy, y);
+                // NOTE: Missing Center position bonus...
             }
             None => {}
         };
