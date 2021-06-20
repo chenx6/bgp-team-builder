@@ -110,6 +110,38 @@ pub struct CardStatus {
     pub skill: u8,
 }
 
+#[derive(Deserialize)]
+pub struct SongNote {
+    pub time: f64,
+    pub fever: Option<bool>,
+    pub skill: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivateEffectType {
+    pub activate_effect_value: Vec<Value>,
+    pub activate_effect_value_type: String,
+    pub activate_condition: String
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivationEffect {
+    pub unification_activate_effect_value: Option<u32>,
+    pub unification_activate_condition_band_id: Option<u32>,
+    pub activate_effect_types: HashMap<String, ActivateEffectType>
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Skill {
+    pub duration: Vec<f64>,
+    pub activation_effect: ActivationEffect,
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
+}
+
 fn b(t: &str) -> u32 {
     let mut n: u32 = 0;
     let base: u32 = 64;
