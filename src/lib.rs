@@ -22,7 +22,6 @@ pub struct CalcCard {
     card_id: u32,
     character_id: u8,
     score: u32,
-    skill: f64,
     skill_id: u8,
     skill_mul: f64,
 }
@@ -45,7 +44,7 @@ impl PartialOrd for CalcCard {
 
 impl PartialEq for CalcCard {
     fn eq(&self, other: &Self) -> bool {
-        self.score == other.score && self.skill == other.skill
+        self.score == other.score && self.skill_mul == other.skill_mul
     }
 }
 
@@ -151,7 +150,6 @@ fn calc_max_score(
     song_data: &Vec<SongNote>,
     skills: &HashMap<String, Skill>,
 ) -> HashMap<u8, CalcCard> {
-    let card_skill = card_skill_new();
     let mut best_cardset: HashMap<u8, CalcCard> = HashMap::new();
     let mut best_score = 0;
     let mut magazines: HashMap<String, f64> = HashMap::new();
@@ -208,7 +206,6 @@ fn calc_max_score(
                             prop_name,
                             prop_bonus,
                         ),
-                        skill: card_skill[&card.skill_id],
                         skill_id: card.skill_id,
                         skill_mul,
                     });
@@ -462,7 +459,6 @@ mod tests {
             card_id: 588,
             character_id: 12,
             score: 53505,
-            skill: 2.0,
             skill_id: 4,
             skill_mul: 0.5,
         };
@@ -471,7 +467,6 @@ mod tests {
             card_id: 298,
             character_id: 12,
             score: 63880,
-            skill: 1.3,
             skill_id: 13,
             skill_mul: 0.5,
         };

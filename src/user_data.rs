@@ -256,41 +256,6 @@ pub fn character_band_new(
     character_band
 }
 
-/// Generate card skill bonus score
-/// TODO: Use JSONED data
-pub fn card_skill_new() -> HashMap<u8, f64> {
-    [
-        (1, 1.1),
-        (2, 1.3),
-        (3, 1.6),
-        (4, 2.0),
-        (5, 1.1),
-        (6, 1.2),
-        (7, 1.4),
-        (8, 1.1),
-        (9, 1.2),
-        (10, 1.4),
-        (11, 1.3),
-        (12, 1.6),
-        (13, 1.3),
-        (14, 1.6),
-        (15, 1.0),
-        (16, 1.0),
-        (17, 1.65),
-        (18, 2.1),
-        (20, 2.15),
-        (21, 1.4),
-        (22, 1.8),
-        (23, 1.1),
-        (24, 1.3),
-        (25, 1.65),
-        (26, 2.1),
-    ]
-    .iter()
-    .cloned()
-    .collect()
-}
-
 pub fn get_level_score(curr_level: u8, rarity: u8) -> f64 {
     let r1 = [
         0.0,
