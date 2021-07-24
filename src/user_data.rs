@@ -443,10 +443,10 @@ pub fn get_level_score(curr_level: u8, rarity: u8) -> f64 {
         1.0,
     ];
     match rarity {
-        1 => r1[(curr_level - 1) as usize],
-        2 => r2[(curr_level - 1) as usize],
-        3 => r3[(curr_level - 1) as usize],
-        4 => r4[(curr_level - 1) as usize],
-        _ => 1.0
+        1 => *r1.get((curr_level - 1) as usize).unwrap_or(&1.0 as &f64),
+        2 => *r2.get((curr_level - 1) as usize).unwrap_or(&1.0 as &f64),
+        3 => *r3.get((curr_level - 1) as usize).unwrap_or(&1.0 as &f64),
+        4 => *r4.get((curr_level - 1) as usize).unwrap_or(&1.0 as &f64),
+        _ => 1.0,
     }
 }
