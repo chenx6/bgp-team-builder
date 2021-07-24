@@ -162,7 +162,7 @@ fn calc_max_score(
     // Cache skill mul table
     let mut skill_set: HashSet<u32> = HashSet::new();
     for card_stat in user_profile.card_status.iter() {
-        let card = cards.get(&card_stat.id.to_string()).unwrap();
+        let card = cards.get(&card_stat.id.to_string()).unwrap_or(&cards[&1.to_string()]);
         let tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
         skill_set.insert(tag);
     }
@@ -178,13 +178,7 @@ fn calc_max_score(
                     if card_stat.exclude {
                         continue;
                     }
-                    let card = match cards.get(&card_stat.id.to_string()) {
-                        Some(value) => value,
-                        None => {
-                            println!("Cannot find card {}", card_stat.id);
-                            continue;
-                        }
-                    };
+                    let card = cards.get(&card_stat.id.to_string()).unwrap_or(&cards[&1.to_string()]);
                     // If card doesn't release
                     if card.released_at[user_profile.server as usize].is_null() {
                         continue;
