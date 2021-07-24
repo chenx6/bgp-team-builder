@@ -201,15 +201,31 @@ impl UserProfile {
             ("Pastel＊Palettes", "PastelPalettes"),
             ("Poppin'Party", "PoppinParty"),
             ("Roselia", "Roselia"),
+            ("RAISE A SUILEN", "RaiseASuilen"),
+            ("Morfonica", "Morfonica"),
+            ("Everyone", "Everyone"),
         ];
-        for i in band_rename.iter() {
+        // Calculate band bonus that based on band's item
+        let default_bonus: Vec<u8> = vec![1, 1, 1, 1, 1, 1, 1];
+        for (band_name, band_name_profile) in band_rename.iter() {
             bands.insert(
-                String::from(i.0),
-                raw.items[i.1].iter().map(band_item_percentage).collect(),
+                band_name.to_string(),
+                raw.items
+                    .get(*band_name_profile)
+                    .unwrap_or(&default_bonus)
+                    .iter()
+                    .map(band_item_percentage)
+                    .collect(),
             );
         }
-        // bands.insert(String::from("RAISE A SUILEN"), map_to_percentage(raw.items["RAISE A SUILEN"]));
-        // bands.insert(String::from("Morfonica"), map_to_percentage(raw.items["Morfonica"]));
+        // Everyone's item is different
+        bands.insert(
+            "Everyone".to_string(),
+            raw.items["Everyone"]
+                .iter()
+                .map(|v| *v as f64 * 0.25 + 1.0)
+                .collect(),
+        );
         let item_percentage = |v: &u8| *v as f64 / 100.0;
         let mut props: HashMap<String, Vec<f64>> = HashMap::new();
         let menu: Vec<f64> = raw.items["Menu"].iter().map(item_percentage).collect();
