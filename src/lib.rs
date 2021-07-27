@@ -48,6 +48,13 @@ impl PartialEq for CalcCard {
     }
 }
 
+#[wasm_bindgen]
+pub enum EventType {
+    Free,
+    Multi,
+    VS,
+}
+
 /// Multiply wrapper for u32 and f64
 fn mul(n1: u32, n2: f64) -> u32 {
     (n1 as f64 * n2) as u32
@@ -149,6 +156,7 @@ fn calc_max_score(
     character_band: &HashMap<u8, String>,
     song_data: &Vec<SongNote>,
     skills: &HashMap<String, Skill>,
+    event_type: EventType,
 ) -> HashMap<u8, CalcCard> {
     let mut best_cardset: HashMap<u8, CalcCard> = HashMap::new();
     let mut best_score = 0;
@@ -161,10 +169,12 @@ fn calc_max_score(
     magazines.insert(String::from("visual"), user_profile.magazine.visual);
     // Cache skill mul table
     let mut skill_set: HashSet<u32> = HashSet::new();
-    for card_stat in user_profile.card_status.iter() {
-        let card = cards.get(&card_stat.id.to_string()).unwrap_or(&cards[&1.to_string()]);
-        let tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
-        skill_set.insert(tag);
+    if let EventType::VS = event_type {
+        for card_stat in user_profile.card_status.iter() {
+            let card = cards.get(&card_stat.id.to_string()).unwrap_or(&cards[&1.to_string()]);
+            let tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
+            skill_set.insert(tag);
+        }
     }
     let calc_skills: Vec<u32> = skill_set.into_iter().collect();
     let cache_table = cache_table(&calc_skills, &skills, song_data, 26, 0.97, false);
@@ -183,8 +193,14 @@ fn calc_max_score(
                     if card.released_at[user_profile.server as usize].is_null() {
                         continue;
                     }
-                    let skill_tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
-                    let skill_mul = cache_table[&skill_tag][&skill_tag] / 6.0;
+                    // When event_type is VS, calculate skill bonus
+                    let skill_mul = match event_type {
+                        EventType::VS => {
+                            let skill_tag = card.skill_id as u32 * 10 + card_stat.skill as u32;
+                            cache_table[&skill_tag][&skill_tag] / 6.0
+                        },
+                        _ => 1.0
+                    };
                     calc_cards.push(CalcCard {
                         card_id: card_stat.id,
                         character_id: card.character_id,
@@ -238,6 +254,7 @@ pub fn gene_score(
     bands: &JsValue,
     song_data: &JsValue,
     skills: &JsValue,
+    event_type: EventType,
 ) -> JsValue {
     console_error_panic_hook::set_once();
     let event_bonus = event_bonus.into_serde().unwrap();
@@ -257,6 +274,7 @@ pub fn gene_score(
         &character_band,
         &song_data,
         &skills,
+        event_type,
     ))
     .unwrap()
 }
@@ -375,6 +393,7 @@ mod tests {
             &character_band,
             &song_notes,
             &skills,
+            EventType::VS,
         );
         for (k, v) in result.iter() {
             println!(
