@@ -1,5 +1,5 @@
 [package]
-name = "wasmdori"
+name = "bgp-team-builder"
 version = "0.1.0"
 authors = ["chen_null <abc82766@gmail.com>"]
 edition = "2018"
