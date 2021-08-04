@@ -161,3 +161,68 @@ pub fn cache_table(
     }
     table
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::to_string;
+    use crate::CalcCard;
+    use crate::read_json::*;
+
+    #[test]
+    fn song_test() {
+        // A to Z
+        let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
+        let skills = read_skill(String::from("docs/skills.json")).unwrap();
+        // 圣诞老人要来我家
+        // 梦幻的抽鬼牌
+        let calc_card = CalcCard {
+            card_id: 588,
+            character_id: 12,
+            score: 53505,
+            skill_id: 4,
+            skill_mul: 0.5,
+            bp_mul: 1.0,
+        };
+        // 极其梦幻的生物
+        let calc_card2 = CalcCard {
+            card_id: 298,
+            character_id: 12,
+            score: 63880,
+            skill_id: 13,
+            skill_mul: 0.5,
+            bp_mul: 1.0,
+        };
+        let score1 = song_score(
+            &vec![calc_card.skill_id; 6],
+            &vec![0; 6],
+            26,
+            false,
+            0.97,
+            &song_notes,
+            &skills,
+        );
+        let score2 = song_score(
+            &vec![calc_card2.skill_id; 6],
+            &vec![0; 6],
+            26,
+            false,
+            0.97,
+            &song_notes,
+            &skills,
+        );
+        println!("{} {}", score1, score2);
+        assert!(score1 > score2, "{} {}", score1, score2);
+    }
+
+    #[test]
+    fn skill_test() {
+        let skills = read_skill(String::from("docs/skills.json")).unwrap();
+        let tags: Vec<u32> = vec![
+            120, 180, 40, 140, 70, 200, 100, 260, 90, 60, 30, 110, 130, 170, 250, 240,
+        ];
+        let song_notes = read_song_notes(String::from("docs/125.expert.json")).unwrap();
+        let table = cache_table(&tags, &skills, &song_notes, 26, 0.97, false);
+        println!("{}", to_string(&table).unwrap());
+    }
+}
