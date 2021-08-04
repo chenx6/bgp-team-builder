@@ -24,14 +24,15 @@ pub struct CalcCard {
     score: u32,
     skill_id: u8,
     skill_mul: f64,
+    bp_mul: f64,
 }
 
 impl Eq for CalcCard {}
 
 impl Ord for CalcCard {
     fn cmp(&self, other: &Self) -> Ordering {
-        let score = self.score as f64 * self.skill_mul;
-        let other_score = other.score as f64 * other.skill_mul;
+        let score = self.score as f64 * self.skill_mul * self.bp_mul;
+        let other_score = other.score as f64 * other.skill_mul * other.bp_mul;
         score.partial_cmp(&other_score).unwrap_or(Ordering::Equal)
     }
 }
@@ -44,7 +45,9 @@ impl PartialOrd for CalcCard {
 
 impl PartialEq for CalcCard {
     fn eq(&self, other: &Self) -> bool {
-        self.score == other.score && self.skill_mul == other.skill_mul
+        self.score == other.score
+            && self.skill_mul == other.skill_mul
+            && self.bp_mul == other.bp_mul
     }
 }
 
@@ -72,13 +75,13 @@ fn calc_card_score(
     band_bonus: &Vec<f64>,
     prop_name: &String,
     prop_bonus: &Vec<f64>,
-) -> u32 {
+) -> (u32, f64) {
     let mut card_data = CardData {
         performance: 0,
         technique: 0,
         visual: 0,
     };
-    let mut bonus = 0.0;
+    let mut bonus = 1.0;
     let level_percentage = get_level_score(card_stat.level, card.rarity);
     // Card stat related
     for (rank, info) in card.stat.iter() {
@@ -127,7 +130,7 @@ fn calc_card_score(
     }
     // All bonus sum up
     let mut score: f64 = (card_data.performance + card_data.technique + card_data.visual) as f64;
-    score *= bonus + 1.0;
+    score *= bonus;
     // Parameter bonus
     if has_event == 2 {
         score += 0.5
@@ -145,7 +148,7 @@ fn calc_card_score(
             "visual" => card_data.visual,
             _ => 0,
         } as f64;
-    score as u32
+    (score as u32, bonus)
 }
 
 /// Use user profile and event bonus to calculate max score cardset
@@ -201,23 +204,25 @@ fn calc_max_score(
                         },
                         _ => 1.0
                     };
+                    let (score, bp_mul) = calc_card_score(
+                        card,
+                        card_stat,
+                        event_bonus,
+                        character_band,
+                        magazine_name,
+                        magazine_bonus,
+                        band_name,
+                        band_bonus,
+                        prop_name,
+                        prop_bonus,
+                    );
                     calc_cards.push(CalcCard {
                         card_id: card_stat.id,
                         character_id: card.character_id,
-                        score: calc_card_score(
-                            card,
-                            card_stat,
-                            event_bonus,
-                            character_band,
-                            magazine_name,
-                            magazine_bonus,
-                            band_name,
-                            band_bonus,
-                            prop_name,
-                            prop_bonus,
-                        ),
+                        score,
                         skill_id: card.skill_id,
                         skill_mul,
+                        bp_mul,
                     });
                 }
                 // Sort by score
@@ -442,7 +447,7 @@ mod tests {
         let mut final_score = 0;
         for card_stat in card_status.iter() {
             let card = all_cards.get(&card_stat.id.to_string()).unwrap();
-            let curr_score = calc_card_score(
+            let (curr_score, _) = calc_card_score(
                 &card,
                 &card_stat,
                 &event_bonus,
@@ -474,6 +479,7 @@ mod tests {
             score: 53505,
             skill_id: 4,
             skill_mul: 0.5,
+            bp_mul: 1.0,
         };
         // 极其梦幻的生物
         let calc_card2 = CalcCard {
@@ -482,6 +488,7 @@ mod tests {
             score: 63880,
             skill_id: 13,
             skill_mul: 0.5,
+            bp_mul: 1.0,
         };
         let score1 = song_score(
             &vec![calc_card.skill_id; 6],
