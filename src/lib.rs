@@ -223,7 +223,10 @@ fn calc_max_score(
                         score,
                         skill_id: card.skill_id,
                         skill_mul,
-                        bp_mul,
+                        bp_mul: match event_type {
+                            EventType::VS => 1.0,
+                            _ => bp_mul,
+                        },
                     });
                 }
                 // Sort by score
