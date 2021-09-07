@@ -59,6 +59,35 @@ pub enum EventType {
     VS,
 }
 
+/// Calculation result
+#[derive(Serialize)]
+pub struct CalcResult {
+    /// Best team (card id and card status)
+    best_team: HashMap<u8, CalcCard>,
+    /// selected band name
+    band_name: String,
+    /// selected magazine
+    magazine: String,
+    /// selected prop
+    prop: String,
+}
+
+impl CalcResult {
+    pub fn new(
+        best_team: HashMap<u8, CalcCard>,
+        band_name: String,
+        magazine: String,
+        prop: String,
+    ) -> CalcResult {
+        CalcResult {
+            best_team,
+            band_name,
+            magazine,
+            prop,
+        }
+    }
+}
+
 /// Multiply wrapper for u32 and f64
 fn mul(n1: u32, n2: f64) -> u32 {
     (n1 as f64 * n2) as u32
@@ -161,8 +190,7 @@ fn calc_max_score(
     song_data: &Vec<SongNote>,
     skills: &HashMap<String, Skill>,
     event_type: EventType,
-) -> HashMap<u8, CalcCard> {
-    let mut best_cardset: HashMap<u8, CalcCard> = HashMap::new();
+) -> CalcResult {
     let mut best_score = 0;
     let mut magazines: HashMap<String, f64> = HashMap::new();
     magazines.insert(
@@ -171,6 +199,13 @@ fn calc_max_score(
     );
     magazines.insert(String::from("technique"), user_profile.magazine.technique);
     magazines.insert(String::from("visual"), user_profile.magazine.visual);
+
+    let mut best_result = CalcResult::new(
+        HashMap::new(),
+        character_band[&event_bonus.characters[0]].clone(),
+        event_bonus.parameter.clone(),
+        event_bonus.prop.clone(),
+    );
     // Cache skill mul table
     let mut skill_set: HashSet<u32> = HashSet::new();
     if let EventType::VS = event_type {
@@ -245,12 +280,17 @@ fn calc_max_score(
                 }
                 if result_score > best_score {
                     best_score = result_score;
-                    best_cardset = result;
+                    best_result = CalcResult::new(
+                        result,
+                        band_name.clone(),
+                        magazine_name.clone(),
+                        prop_name.clone(),
+                    );
                 }
             }
         }
     }
-    best_cardset
+    best_result
 }
 
 /// Use JS side data to build team that can get best score
@@ -345,7 +385,8 @@ mod tests {
             &skills,
             EventType::VS,
         );
-        for (k, v) in result.iter() {
+        println!("{} {} {}", result.band_name, result.prop, result.magazine);
+        for (k, v) in result.best_team.iter() {
             println!(
                 "{} {}",
                 k,
@@ -354,7 +395,7 @@ mod tests {
                     .unwrap()
             );
         }
-        assert_eq!(result.len(), 5, "Calculation failed!")
+        assert_eq!(result.best_team.len(), 5, "Calculation failed!")
     }
 
     #[test]
